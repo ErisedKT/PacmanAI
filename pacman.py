@@ -1,135 +1,9 @@
 #! /usr/bin/python3
 # pacman.py - Finds shortest past to food pellet in maze.
 
-maze_file = 'bigMaze.txt'
-maze_txt = open(maze_file).readlines()
-h = 0
+from queue import Queue, PriorityQueue
+from classes import Cell, Maze, Pacman
 
-class Cell(object):
-    def __init__(self, x, y, h):
-        self._x = x
-        self._y = y
-        self.h = h
-        h += 1
-        
-        if (maze_txt[y][x] == '%'):
-            self._free = False
-        else:
-            self._free = True
-    
-    @property
-    def x(self):
-        return self._x
-    
-    @property
-    def y(self):
-        return self._y
-
-    @property
-    def free(self):
-        return self._free
-
-    def accessible(self, maze):
-        acc = []
-        if (maze[self.y][self.x+1].free):
-            acc.append(maze[self.y][self.x+1])
-        if (maze[self.y][self.x-1].free):
-            acc.append(maze[self.y][self.x-1])
-        if (maze[self.y+1][self.x].free):
-            acc.append(maze[self.y+1][self.x])
-        if (maze[self.y-1][self.x].free):
-            acc.append(maze[self.y-1][self.x])
-        return acc
-
-    def __eq__(self, other):
-        return self.x == other.x and self.y == other.y
-
-    def __hash__(self):
-        return self.h
-
-    def __repr__(self):
-        return '<' + str(self._x) + ', ' + str(self._y) + '>'
-
-class Maze(object):
-    def __init__(self, maze_in):
-        """Create maze"""
-        self.rows = len(maze_in)
-        self.cols = len(maze_in[0])
-        self._maze = []
-        
-        # Create maze array with Cell objects.
-        for r in range(self.rows):
-            row = []
-            for c in range(self.cols):
-                row.append(Cell(c, r, h))
-                if (maze_txt[r][c] == 'P'):
-                    self._pacman = Pacman(c, r)
-                elif (maze_txt[r][c] == '.'):
-                    self.food_coords = (c, r)
-            self.maze.append(row)
-
-    @property
-    def maze(self):
-        return self._maze
-
-    @property
-    def pacman(self):
-        return self._pacman
-
-    def food_cell(self):
-        return self._maze[self.food_coords[1]][self.food_coords[0]]
-            
-
-class Pacman(object):
-    def __init__(self, x, y):
-        """Create a pacman"""
-        self.x = x
-        self.y = y
-
-    def move_r(self, maze):
-        if (maze[self.y][self.x + 1].is_free()):
-            self.x += 1
-
-    def move_l(self, maze):
-        if (maze[self.y][self.x - 1].is_free()):
-            self.x -= 1
-
-    def move_u(self, maze):
-        if (maze[self.y - 1][self.x].is_free()):
-            self.y -= 1
-
-    def move_d(self, maze):
-        if (maze[self.y + 1][self.x].is_free()):
-            self.y += 1
-
-    def get_cell(self, maze):
-        return maze[self.y][self.x]
-
-def bfs_driver(maze_obj):
-    src = maze_obj.pacman.get_cell(maze_obj.maze)
-    dest = maze_obj.food_cell()
-    level = {src: 0}
-    parent = {src: None}
-    current = [src]
-    i = 1
-    while current:
-        next = []
-        for u in current:
-            for v in u.accessible(maze_obj.maze):
-                if v not in level:
-                    next.append(v)
-                    level[v] = i
-                    parent[v] = u
-                if v == dest:
-                    path = [v]
-                    node = v
-                    while node != src:
-                        path.append(parent[node])
-                        node = parent[node]
-                    return (level[v], path[::-1])
-        current = next
-        i += 1
-        
 
 def dfs(maze_obj, start, end, path):
     path = path + [start]
@@ -137,15 +11,91 @@ def dfs(maze_obj, start, end, path):
         return path
     for node in start.accessible(maze_obj.maze):
         if node not in path:
-            newPath = dfs(maze_obj, node, end, path)
-            if newPath:
-                return newPath
+            new_path = dfs(maze_obj, node, end, path)
+            if new_path:
+                return new_path
 
-def dfs_driver(maze_obj):
+
+def bfs(maze_obj, start, end):
+    frontier = Queue()
+    frontier.put(start)
+    parent = {start: None}
+
+    while not frontier.empty():
+        current = frontier.get()
+        if current == end:
+            return parent
+        
+        for next in current.accessible(maze_obj.maze):
+            if next not in parent:
+                parent[next] = current
+                frontier.put(next)
+        
+
+
+def manhattan(c1, c2):
+    return abs(c2.x - c1.x) + abs(c2.y - c1.y)
+
+
+def greedy(maze_obj, start, end):
+    frontier = PriorityQueue()
+    count = 0
+    frontier.put((0, count, start))
+    count += 1
+    parent = {start: None}
+    
+    while not frontier.empty():
+        current = frontier.get()[2]
+
+        if current == end:
+            return parent
+
+        for next in current.accessible(maze_obj.maze):
+            if next not in parent:
+                priority = manhattan(next, end)
+                frontier.put((priority, count, next))
+                count += 1
+                parent[next] = current
+
+
+def astar(maze_obj, start, end):
+    frontier = PriorityQueue()
+    count = 0
+    frontier.put((0, count, start))
+    parent = {start: None}
+    cost = {start: 0}
+    
+    while not frontier.empty():
+        current = frontier.get()[2]
+
+        if current == end:
+            return parent
+
+        for next in current.accessible(maze_obj.maze):
+            new_cost = cost[current] + 1
+            if next not in cost or new_cost < cost[next]:
+                cost[next] = new_cost
+                priority = new_cost + manhattan(next, end)
+                frontier.put((priority, count, next))
+                count += 1
+                parent[next] = current
+
+
+def search_driver(maze_obj, search):
     start = maze_obj.pacman.get_cell(maze_obj.maze)
     end = maze_obj.food_cell()
-    shortest = dfs(maze_obj, start, end, [])
-    return (len(shortest) - 1, shortest)
+
+    if search == dfs:
+        path = dfs(maze_obj, start, end, [])
+        return (len(path) - 1, path)
+    
+    parent = search(maze_obj, start, end)
+    path = [end]
+    node = end
+    while node != start:
+        path.append(parent[node])
+        node = parent[node]
+    return (len(path) - 1, path[::-1])
 
 
 def display_path(maze_obj, path):
@@ -164,33 +114,15 @@ def display_path(maze_obj, path):
         maze_out.write(r)
 
 
-def manhattan(c1, c2):
-    return abs(c2.x - c1.x) + abs(c2.y - c1.y)
-
-
-def greedy(maze_obj, start, end, path):
-    path = path + [start]
-    if start == end:
-        return path
-    children = sorted(start.accessible(maze_obj.maze),\
-        key=(lambda c: manhattan(c, end)))
-    for node in children:
-        if node not in path:
-            newPath = greedy(maze_obj, node, end, path)
-            if newPath:
-                return newPath
-            
-
-def greedy_driver(maze_obj):
-    start = maze_obj.pacman.get_cell(maze_obj.maze)
-    end = maze_obj.food_cell()
-    shortest = greedy(maze_obj, start, end, [])
-    return (len(shortest) - 1, shortest)
+maze_file = 'bigMaze.txt'
+maze_txt = open(maze_file).readlines()
 
 big_maze = Maze(maze_txt)
-steps, shortest = bfs_driver(big_maze)
+steps, path = search_driver(big_maze, bfs)
 print('Steps to food (BFS):', steps)
-steps, shortest = dfs_driver(big_maze)
+steps, path = search_driver(big_maze, dfs)
 print('Steps to food (DFS):', steps)
-steps, shortest = greedy_driver(big_maze)
+steps, path = search_driver(big_maze, greedy)
 print('Steps to food (Greedy):', steps)
+steps, path = search_driver(big_maze, astar)
+print('Steps to food (A*):', steps)
